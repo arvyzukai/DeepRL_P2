@@ -60,13 +60,12 @@ In searching for better performance you can modify:
 1. Training process by modifying `hyperparameters` (check Report.md for my hyperparameters search history)
 
         'episode_count': 1500,
-        'discount_rate': 0.99,
-        'tau': 0.5,
+        'discount_rate': 0.95,
         'gradient_clip': 15,
         'buffer_size': 3072,
         'optimization_epochs': 2,
         'ppo_clip': 0.2,
-        'batch_size': 64,
+        'batch_size': 512,
         'adam_learning_rate': 3e-4,
         'adam_epsilon': 1e-4
 
