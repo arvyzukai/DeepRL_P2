@@ -47,7 +47,7 @@ Then, place the file in the `p2_continuous-control/` folder in the DRLND GitHub 
 
 ### Instructions
 
-Follow the instructions in `Continuous_Control_PPO.ipynb` to train your own agent or test the already trained agent:
+Follow the instructions in `Continuous_Control_PPO_win.ipynb` or `Continuous_Control_PPO_Linux.ipynb` to train your own agent or test the already trained agent:
 1. Start the Environment - currently works only with version 1 (single agent) of the environment
 2. Examine the State and Action Spaces
 3. Optionally take Random Actions in the Environment
