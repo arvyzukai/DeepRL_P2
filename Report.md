@@ -1,6 +1,5 @@
 [image1]: single_agent_solved.png "Trained Agent"
 [image2]: clipped_surrogate_function.png "Clipped surrogate function"
-[image3]: hyperparameters_history.png "Hyper parameters history"
 
 # Project 2: Continuous Control
 
@@ -83,14 +82,14 @@ and PolicyNN:
 
 The Agent's Policy network returns:
  - action: the action based on ActorNN,
- - log_prob: log probability of the sampled action with respect to the ActorNN,
+ - log_prob: log probability of the sampled action according to the ActorNN,
  - v: the value of the provided state according to the CriticNN.
 
 The log_prob is calculated from Normal distribution with Standard deviation of 1. 
 
 If the `action` is not provided (i.e. when filling Critic's memory) then it is sampled with some noise under current ActorNN policy.
 
-In the early versions of the Agent I tried different Standard deviations with poor results (at first the Agent was not capable of solving the Environment and Standard deviation may not be the culprit).
+The Standard deviation of 1 helps solve the Environment but there maybe better values for it. In the early versions of the Agent I tried different Standard deviations with poor results (at first the Agent was not capable of solving the Environment but Standard deviation may not be the culprit). 
 
 The PolicyNN architecture was chosen purely from intuition and was not much experimented with. Here might be a lot of room for improvement.
 
@@ -104,13 +103,12 @@ The hyperparameters that Agent was able to solve the Environment are:
 
     hyperparameters = {
             'episode_count': 1500,
-            'discount_rate': 0.99,
-            'tau': 0.5,
+            'discount_rate': 0.95,
             'gradient_clip': 15,
             'buffer_size': 3072,
             'optimization_epochs': 2,
             'ppo_clip': 0.2,
-            'batch_size': 64,
+            'batch_size': 512,
             'adam_learning_rate': 3e-4,
             'adam_epsilon': 1e-4
         }
@@ -119,32 +117,30 @@ The most important part of the Agent is the `.step` method.
 
 In first part of this method the Agent fill Critic's buffer (size 3072 from hyperparameters) with samples according to current Policy Network.
 
-Then the buffer is preprocessed for PyTorch and most importantly the Advantages are calculated:
+Then the buffer is preprocessed for PyTorch and most importantly the Advantage (`td_estimate`) is calculated:
 
             ...
             returns = rewards + hyperparameters['discount_rate'] * dones * returns
             # advantage calculation based on critic values
-            td_error = rewards + hyperparameters['discount_rate'] * dones * next_value.detach() - value.detach() * dones
-            advantages = advantages * hyperparameters['tau'] * hyperparameters['discount_rate'] * dones + td_error
-            processed_buffer[i] = [states, actions, log_probs, returns, advantages]
+            td_estimate = rewards + hyperparameters['discount_rate'] * dones * next_value.detach() - value.detach() * dones
+            processed_buffer[i] = [states, actions, log_probs, returns, td_estimate]
             ...
 
  - returns are discounted with `hyperparameters['discount_rate']`
- - Critic estimates the `td_error` by comparing the estimated value (discounted) of the next state with the estimated value of the current state (plus the reward)
- - advantages are further discounted with 'discount_rate' and *crucially* with the 'tau'. The Environment was solved (in 285 Episode) when hyperparameter `'tau'` was lowered to the value of 0.5.
+ - Critic calculates the `td_estimate` by summing Reward with the difference between the estimated value (discounted) of the next state and the estimated value of the current state.
 
 ###### The Loss
 
 The Agent's performance is optimized by minimizing surrogate Loss. In every optimization_epoch and in every batch the Agent updates PolicyNN weights according to this Loss.:
 
                 _, log_probs, values = self.network(sampled_states, sampled_actions)
-                ratio = (log_probs - sampled_log_probs).exp()
+                ratio = (log_probs - sampled_log_probs).exp()      # re-weighting factor
                 obj = ratio * sampled_advantages
                 obj_clipped = ratio.clamp(1.0 - hyperparameters['ppo_clip'],
                                           1.0 + hyperparameters['ppo_clip']) * sampled_advantages
-                policy_loss = -torch.min(obj, obj_clipped).mean(0)
+                policy_loss = -torch.min(obj, obj_clipped).mean(0) # ppo surrogate function
 
-                value_loss = 0.5 * (sampled_returns - values).pow(2).mean()
+                value_loss = (10/(self.step_count)) * (sampled_returns - values).pow(2).mean()   # initially helps to train policy
 
                 self.optimizer.zero_grad()
                 (policy_loss + value_loss).backward()
@@ -160,20 +156,23 @@ Furthermore, the 'value_loss' is calculated by squaring the difference between s
 Finally, the policy_loss (negative for the gradient ascent) and value_loss are summed together to calculate the gradient. 
 
 ### Achieved performance
-The current implementation achieved desired performance (average score of last 100 episodes >= 30) in 285 Episodes of training (Note: each Episode consisted of 3072 steps in the environment i.e. 285x3072 steps were needed in the Environment). 
+The current implementation achieved desired performance (average score of last 100 episodes >= 30) in 191 Episodes of training (Note: each Episode contains 3072 steps in the Environment). 
 
 ![Performance plot](performance_plot.png)
+
+The current implementation of the Agent usually needs less than 200 Episodes to train:
+
+![Final 7 runs](final_7_runs.png)
 
 ### Future improvements
 
 The Agent could be improved in many ways:
-* *faster training* - by tweaking Algorithm's hyper parameters (for example reducing buffer_size) Agent could achieve similar performance needing fewer steps in the Environment.
-* implement *gpu* training (NVidia RTX 3090 has troubles with PyTorch 0.4.0 which requires Cuda version 8, but the GPU is not supported by Cuda 8)
+* *faster training* - by tweaking Algorithm's hyper parameters (for example reducing buffer_size) Agent could achieve similar performance needing fewer steps in the Environment. (Note: Hyper Parameters search history can be found in drlp2_hyperparameter_grid.xlsx)
+* implement *gpu* training (Note: newer gpu cards like NVidia RTX 3090 has troubles with Cuda version 8 - the requirement in current Environment)
 * *better performance* - by training longer, increasing Replay Buffer, using more sophisticated Policy Network could improve Agent's Policy by achieving higher scores than threshold.
 * by implementing other algorithms - DDPG, A3C, D4PG and others.
-* it would be interesting to try implement the Attention mechanism for the Agent.
+* it would be interesting to try implementing the Attention mechanism for this Agent.
 
-Note:
-Before solving the Environment, the same hyper parameters took 1000 Episodes to reach 29.44 average_score of the last 100 Episodes (*last column):
 
-![Hyper Parameters history](hyperparameters_history.png)
+
+
